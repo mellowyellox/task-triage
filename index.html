@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#111827" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Task Triage" />
+  <title>Task Triage</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">LOCAL-FIRST PROJECT ASSISTANT</p>
+      <h1>Task Triage</h1>
+      <p class="subtitle">Capture work. Re-rank automatically. Focus on what matters now.</p>
+    </div>
+    <button id="installBtn" class="ghost hidden">Install app</button>
+  </header>
+
+  <main>
+    <section class="panel">
+      <div class="section-title-row">
+        <div>
+          <h2>Add task</h2>
+          <p>Tasks are stored on this device. Priority is recalculated whenever data changes.</p>
+        </div>
+      </div>
+
+      <form id="taskForm" class="task-form">
+        <label>
+          Task / reminder
+          <input id="title" required maxlength="160" placeholder="e.g. Send steering committee deck" />
+        </label>
+
+        <div class="grid two">
+          <label>
+            Deadline
+            <input id="deadline" type="datetime-local" />
+          </label>
+          <label>
+            Effort
+            <select id="effort">
+              <option value="1">Tiny · &lt; 30 min</option>
+              <option value="2" selected>Small · 30–90 min</option>
+              <option value="3">Medium · 2–4 hr</option>
+              <option value="4">Large · 1 day</option>
+              <option value="5">Very large · 2+ days</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label>
+            Business importance
+            <select id="importance">
+              <option value="1">Low</option>
+              <option value="2">Normal</option>
+              <option value="3" selected>Important</option>
+              <option value="4">High</option>
+              <option value="5">Critical</option>
+            </select>
+          </label>
+          <label>
+            Project / category
+            <input id="category" maxlength="60" placeholder="e.g. Phoenix rollout" />
+          </label>
+        </div>
+
+        <label>
+          Notes
+          <textarea id="notes" rows="3" maxlength="1000" placeholder="Optional context, dependencies, next action…"></textarea>
+        </label>
+
+        <button class="primary" type="submit">Add & reprioritise</button>
+      </form>
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel focus-panel">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow urgent">DO THESE FIRST</p>
+            <h2>Top <span class="topNLabel">5</span> urgent</h2>
+          </div>
+          <span id="urgentCount" class="count-pill">0</span>
+        </div>
+        <div id="urgentList" class="card-list empty-state">No open tasks yet.</div>
+      </article>
+
+      <article class="panel">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">AGING WORK</p>
+            <h2>Top <span class="topNLabel">5</span> longest open</h2>
+          </div>
+          <span id="oldestCount" class="count-pill">0</span>
+        </div>
+        <div id="oldestList" class="card-list empty-state">No open tasks yet.</div>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-title-row wrap">
+        <div>
+          <h2>All tasks</h2>
+          <p><span id="openCount">0</span> open · <span id="doneCount">0</span> completed</p>
+        </div>
+        <div class="toolbar">
+          <select id="statusFilter" aria-label="Filter tasks">
+            <option value="open" selected>Open</option>
+            <option value="all">All</option>
+            <option value="done">Completed</option>
+          </select>
+          <select id="sortMode" aria-label="Sort tasks">
+            <option value="priority" selected>Priority</option>
+            <option value="deadline">Deadline</option>
+            <option value="age">Oldest first</option>
+            <option value="createdDesc">Newest first</option>
+          </select>
+        </div>
+      </div>
+      <div id="allTasks" class="table-wrap"></div>
+    </section>
+
+    <section class="panel settings">
+      <div class="section-title-row wrap">
+        <div>
+          <h2>Settings & data</h2>
+          <p>Keep it local, or move the same JSON file between devices.</p>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <label>
+          Number shown in each focus list
+          <input id="topN" type="number" min="1" max="20" value="5" />
+        </label>
+        <div class="button-stack">
+          <button id="exportBtn" class="secondary" type="button">Export JSON</button>
+          <label class="file-button secondary">
+            Import JSON
+            <input id="importInput" type="file" accept="application/json,.json" />
+          </label>
+          <button id="seedBtn" class="secondary" type="button">Load demo tasks</button>
+          <button id="clearBtn" class="danger" type="button">Clear local data</button>
+        </div>
+      </div>
+      <div class="cloud-note">
+        <strong>Cloud-ready design:</strong> the storage layer is isolated in <code>app.js</code>. Replace local storage with Google Drive / OneDrive API calls after OAuth without changing the UI or ranking logic.
+      </div>
+    </section>
+  </main>
+
+  <dialog id="editDialog">
+    <form method="dialog" id="editForm" class="dialog-card">
+      <div class="section-title-row">
+        <h2>Edit task</h2>
+        <button type="button" id="closeDialog" class="icon-button" aria-label="Close">×</button>
+      </div>
+      <input id="editId" type="hidden" />
+      <label>Task<input id="editTitle" required maxlength="160" /></label>
+      <div class="grid two">
+        <label>Deadline<input id="editDeadline" type="datetime-local" /></label>
+        <label>Effort<select id="editEffort">
+          <option value="1">Tiny · &lt; 30 min</option><option value="2">Small · 30–90 min</option><option value="3">Medium · 2–4 hr</option><option value="4">Large · 1 day</option><option value="5">Very large · 2+ days</option>
+        </select></label>
+      </div>
+      <div class="grid two">
+        <label>Importance<select id="editImportance">
+          <option value="1">Low</option><option value="2">Normal</option><option value="3">Important</option><option value="4">High</option><option value="5">Critical</option>
+        </select></label>
+        <label>Project / category<input id="editCategory" maxlength="60" /></label>
+      </div>
+      <label>Notes<textarea id="editNotes" rows="4" maxlength="1000"></textarea></label>
+      <div class="dialog-actions">
+        <button class="primary" value="save">Save changes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="taskCardTemplate">
+    <div class="task-card">
+      <div class="task-main">
+        <div class="task-title-row">
+          <strong class="task-title"></strong>
+          <span class="priority-badge"></span>
+        </div>
+        <div class="task-meta"></div>
+        <p class="task-notes"></p>
+      </div>
+      <div class="task-actions">
+        <button class="complete-btn small primary" type="button">Done</button>
+        <button class="edit-btn small secondary" type="button">Edit</button>
+      </div>
+    </div>
+  </template>
+
+  <script src="app.js" defer></script>
+</body>
+</html>

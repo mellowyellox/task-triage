@@ -1,0 +1,13 @@
+{
+  "name": "Task Triage",
+  "short_name": "Task Triage",
+  "description": "Local-first task tracker that automatically reprioritises project work.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#111827",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
