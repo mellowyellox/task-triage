@@ -13,10 +13,22 @@ function uid() {
   return (crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`);
 }
 
+function normalizeTask(task) {
+  const status = ['Open', 'Closed', 'KIV'].includes(task.status)
+    ? task.status
+    : (task.completedAt ? 'Closed' : 'Open');
+  return {
+    ...task,
+    status,
+    actionBy: ['Vendor', 'Cust'].includes(task.actionBy) ? task.actionBy : 'Vendor',
+    completedAt: status === 'Closed' ? (task.completedAt || task.updatedAt || nowISO()) : null
+  };
+}
+
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved?.tasks && Array.isArray(saved.tasks)) state = saved;
+    if (saved?.tasks && Array.isArray(saved.tasks)) state = { ...saved, tasks: saved.tasks.map(normalizeTask) };
   } catch (_) {}
   try {
     const savedSettings = JSON.parse(localStorage.getItem(SETTINGS_KEY));
@@ -49,7 +61,7 @@ function deadlineHours(task, now = new Date()) {
 
 // Deterministic, explainable ranking. No external AI/API required.
 function priorityScore(task, now = new Date()) {
-  if (task.completedAt) return -Infinity;
+  if (task.status !== 'Open') return -Infinity;
   const hrs = deadlineHours(task, now);
   const importance = Number(task.importance || 3);
   const effort = Number(task.effort || 2);
@@ -75,7 +87,8 @@ function priorityScore(task, now = new Date()) {
 }
 
 function priorityLabel(task) {
-  if (task.completedAt) return 'Done';
+  if (task.status === 'Closed') return 'Closed';
+  if (task.status === 'KIV') return 'KIV';
   const hrs = deadlineHours(task);
   if (hrs !== null && hrs < 0) return 'OVERDUE';
   const score = priorityScore(task);
@@ -109,7 +122,7 @@ function deadlineText(task) {
 }
 
 function openTasks() {
-  return state.tasks.filter(t => !t.completedAt);
+  return state.tasks.filter(t => t.status === 'Open');
 }
 
 function rankedOpen() {
@@ -130,7 +143,7 @@ function renderCard(task) {
   if (hrs !== null && hrs < 0) badge.classList.add('overdue');
   else if (priorityScore(task) >= 80) badge.classList.add('high');
 
-  const metaBits = [deadlineText(task), fmtAge(task), `Importance ${task.importance}/5`, `Effort ${task.effort}/5`];
+  const metaBits = [deadlineText(task), fmtAge(task), `Priority ${task.importance}/5`, `Effort ${task.effort}/5`, `Action By: ${task.actionBy || 'Vendor'}`, `Status: ${task.status || 'Open'}`];
   if (task.category) metaBits.push(task.category);
   node.querySelector('.task-meta').textContent = metaBits.join(' · ');
   const notes = node.querySelector('.task-notes');
@@ -155,8 +168,7 @@ function renderAllTasks() {
   const status = $('statusFilter').value;
   const mode = $('sortMode').value;
   let tasks = state.tasks.slice();
-  if (status === 'open') tasks = tasks.filter(t => !t.completedAt);
-  if (status === 'done') tasks = tasks.filter(t => t.completedAt);
+  if (status !== 'all') tasks = tasks.filter(t => t.status === status);
 
   tasks.sort((a, b) => {
     if (mode === 'deadline') {
@@ -175,25 +187,27 @@ function renderAllTasks() {
   }
 
   const table = document.createElement('table');
-  table.innerHTML = '<thead><tr><th>Task</th><th>Deadline</th><th>Priority</th><th>Age</th><th>Project</th><th>Actions</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Task</th><th>Deadline</th><th>Priority</th><th>Status</th><th>Action By</th><th>Age</th><th>Project</th><th>Actions</th></tr></thead>';
   const tbody = document.createElement('tbody');
   tasks.forEach(task => {
     const tr = document.createElement('tr');
-    if (task.completedAt) tr.classList.add('done');
+    if (task.status === 'Closed') tr.classList.add('done');
     tr.innerHTML = `
       <td><strong class="row-title"></strong><div class="task-meta"></div></td>
-      <td></td><td></td><td></td><td></td><td class="row-actions"></td>`;
+      <td></td><td></td><td></td><td></td><td></td><td></td><td class="row-actions"></td>`;
     tr.children[0].querySelector('.row-title').textContent = task.title;
     tr.children[0].querySelector('.task-meta').textContent = task.notes || '';
     tr.children[1].textContent = task.deadline ? fmtDate(task.deadline) : '—';
-    tr.children[2].textContent = task.completedAt ? 'Done' : `${priorityLabel(task)} (${priorityScore(task)})`;
-    tr.children[3].textContent = fmtAge(task);
-    tr.children[4].textContent = task.category || '—';
-    const actions = tr.children[5];
+    tr.children[2].textContent = task.status === 'Open' ? `${priorityLabel(task)} (${priorityScore(task)})` : '—';
+    tr.children[3].textContent = task.status;
+    tr.children[4].textContent = task.actionBy || 'Vendor';
+    tr.children[5].textContent = fmtAge(task);
+    tr.children[6].textContent = task.category || '—';
+    const actions = tr.children[7];
     const toggle = document.createElement('button');
     toggle.className = 'small primary';
-    toggle.textContent = task.completedAt ? 'Reopen' : 'Done';
-    toggle.addEventListener('click', () => task.completedAt ? reopenTask(task.id) : completeTask(task.id));
+    toggle.textContent = task.status === 'Closed' ? 'Reopen' : 'Close';
+    toggle.addEventListener('click', () => task.status === 'Closed' ? reopenTask(task.id) : completeTask(task.id));
     const edit = document.createElement('button');
     edit.className = 'small secondary'; edit.textContent = 'Edit';
     edit.addEventListener('click', () => openEdit(task.id));
@@ -210,12 +224,14 @@ function renderAllTasks() {
 
 function render() {
   const open = openTasks();
-  const done = state.tasks.filter(t => t.completedAt);
+  const done = state.tasks.filter(t => t.status === 'Closed');
+  const kiv = state.tasks.filter(t => t.status === 'KIV');
   const n = settings.topN;
   document.querySelectorAll('.topNLabel').forEach(el => el.textContent = n);
   $('topN').value = n;
   $('openCount').textContent = open.length;
   $('doneCount').textContent = done.length;
+  $('kivCount').textContent = kiv.length;
   $('urgentCount').textContent = Math.min(n, open.length);
   $('oldestCount').textContent = Math.min(n, open.length);
   renderFocusList($('urgentList'), rankedOpen().slice(0, n));
@@ -231,10 +247,12 @@ function addTask(data) {
     effort: Number(data.effort || 2),
     importance: Number(data.importance || 3),
     category: (data.category || '').trim(),
+    actionBy: ['Vendor', 'Cust'].includes(data.actionBy) ? data.actionBy : 'Vendor',
+    status: ['Open', 'Closed', 'KIV'].includes(data.status) ? data.status : 'Open',
     notes: (data.notes || '').trim(),
     createdAt: nowISO(),
     updatedAt: nowISO(),
-    completedAt: null
+    completedAt: data.status === 'Closed' ? nowISO() : null
   });
   saveState(); render();
 }
@@ -242,14 +260,14 @@ function addTask(data) {
 function completeTask(id) {
   const task = state.tasks.find(t => t.id === id);
   if (!task) return;
-  task.completedAt = nowISO(); task.updatedAt = nowISO();
+  task.status = 'Closed'; task.completedAt = nowISO(); task.updatedAt = nowISO();
   saveState(); render();
 }
 
 function reopenTask(id) {
   const task = state.tasks.find(t => t.id === id);
   if (!task) return;
-  task.completedAt = null; task.updatedAt = nowISO();
+  task.status = 'Open'; task.completedAt = null; task.updatedAt = nowISO();
   saveState(); render();
 }
 
@@ -275,12 +293,14 @@ function openEdit(id) {
   $('editEffort').value = task.effort;
   $('editImportance').value = task.importance;
   $('editCategory').value = task.category || '';
+  $('editActionBy').value = task.actionBy || 'Vendor';
+  $('editStatus').value = task.status || 'Open';
   $('editNotes').value = task.notes || '';
   $('editDialog').showModal();
 }
 
 function exportData() {
-  const payload = JSON.stringify({ version: 1, exportedAt: nowISO(), settings, tasks: state.tasks }, null, 2);
+  const payload = JSON.stringify({ version: 2, exportedAt: nowISO(), settings, tasks: state.tasks }, null, 2);
   const blob = new Blob([payload], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -298,8 +318,9 @@ async function importData(file) {
     const incoming = obj.tasks.filter(t => t && typeof t.title === 'string').map(t => ({
       id: t.id || uid(), title: t.title, deadline: t.deadline || null,
       effort: Number(t.effort || 2), importance: Number(t.importance || 3),
-      category: t.category || '', notes: t.notes || '',
-      createdAt: t.createdAt || nowISO(), updatedAt: t.updatedAt || nowISO(), completedAt: t.completedAt || null
+      category: t.category || '', actionBy: ['Vendor', 'Cust'].includes(t.actionBy) ? t.actionBy : 'Vendor',
+      status: ['Open', 'Closed', 'KIV'].includes(t.status) ? t.status : (t.completedAt ? 'Closed' : 'Open'), notes: t.notes || '',
+      createdAt: t.createdAt || nowISO(), updatedAt: t.updatedAt || nowISO(), completedAt: (t.status === 'Closed' || (!t.status && t.completedAt)) ? (t.completedAt || nowISO()) : null
     }));
     state.tasks = incoming;
     if (obj.settings?.topN) settings.topN = clampTopN(obj.settings.topN);
@@ -317,13 +338,13 @@ function seedDemo() {
   const d = 24 * h;
   const now = Date.now();
   state.tasks = [
-    { title: 'Prepare steering committee deck', deadline: new Date(now + 7*h).toISOString(), effort: 4, importance: 5, category: 'Phoenix', notes: 'Need status, risks and decision log.', createdAt: new Date(now - 3*d).toISOString() },
-    { title: 'Resolve vendor API dependency', deadline: new Date(now - 5*h).toISOString(), effort: 3, importance: 5, category: 'Integration', notes: 'Blocking UAT.', createdAt: new Date(now - 6*d).toISOString() },
-    { title: 'Review backlog with product owner', deadline: new Date(now + 2*d).toISOString(), effort: 2, importance: 4, category: 'BAU', notes: '', createdAt: new Date(now - 1*d).toISOString() },
-    { title: 'Document current-state process', deadline: null, effort: 5, importance: 3, category: 'Process mapping', notes: 'Has been sitting around too long.', createdAt: new Date(now - 18*d).toISOString() },
-    { title: 'Send meeting minutes', deadline: new Date(now + 18*h).toISOString(), effort: 1, importance: 2, category: 'PMO', notes: '', createdAt: new Date(now - 2*h).toISOString() },
-    { title: 'Confirm UAT tester availability', deadline: new Date(now + 5*d).toISOString(), effort: 1, importance: 4, category: 'UAT', notes: '', createdAt: new Date(now - 9*d).toISOString() }
-  ].map(t => ({ id: uid(), ...t, updatedAt: nowISO(), completedAt: null }));
+    { title: 'Prepare steering committee deck', deadline: new Date(now + 7*h).toISOString(), effort: 4, importance: 5, category: 'Phoenix', actionBy: 'Cust', status: 'Open', notes: 'Need status, risks and decision log.', createdAt: new Date(now - 3*d).toISOString() },
+    { title: 'Resolve vendor API dependency', deadline: new Date(now - 5*h).toISOString(), effort: 3, importance: 5, category: 'Integration', actionBy: 'Vendor', status: 'Open', notes: 'Blocking UAT.', createdAt: new Date(now - 6*d).toISOString() },
+    { title: 'Review backlog with product owner', deadline: new Date(now + 2*d).toISOString(), effort: 2, importance: 4, category: 'BAU', actionBy: 'Cust', status: 'Open', notes: '', createdAt: new Date(now - 1*d).toISOString() },
+    { title: 'Document current-state process', deadline: null, effort: 5, importance: 3, category: 'Process mapping', actionBy: 'Cust', status: 'KIV', notes: 'Has been sitting around too long.', createdAt: new Date(now - 18*d).toISOString() },
+    { title: 'Send meeting minutes', deadline: new Date(now + 18*h).toISOString(), effort: 1, importance: 2, category: 'PMO', actionBy: 'Cust', status: 'Open', notes: '', createdAt: new Date(now - 2*h).toISOString() },
+    { title: 'Confirm UAT tester availability', deadline: new Date(now + 5*d).toISOString(), effort: 1, importance: 4, category: 'UAT', actionBy: 'Vendor', status: 'Open', notes: '', createdAt: new Date(now - 9*d).toISOString() }
+  ].map(t => ({ id: uid(), ...t, updatedAt: nowISO(), completedAt: t.status === 'Closed' ? nowISO() : null }));
   saveState(); render();
 }
 
@@ -332,10 +353,10 @@ $('taskForm').addEventListener('submit', (e) => {
   addTask({
     title: $('title').value, deadline: $('deadline').value ? new Date($('deadline').value).toISOString() : null,
     effort: $('effort').value, importance: $('importance').value,
-    category: $('category').value, notes: $('notes').value
+    category: $('category').value, actionBy: $('actionBy').value, status: $('taskStatus').value, notes: $('notes').value
   });
   e.currentTarget.reset();
-  $('effort').value = '2'; $('importance').value = '3';
+  $('effort').value = '2'; $('importance').value = '3'; $('actionBy').value = 'Vendor'; $('taskStatus').value = 'Open';
   $('title').focus();
 });
 
@@ -348,6 +369,9 @@ $('editForm').addEventListener('submit', (e) => {
   task.effort = Number($('editEffort').value);
   task.importance = Number($('editImportance').value);
   task.category = $('editCategory').value.trim();
+  task.actionBy = $('editActionBy').value;
+  task.status = $('editStatus').value;
+  task.completedAt = task.status === 'Closed' ? (task.completedAt || nowISO()) : null;
   task.notes = $('editNotes').value.trim();
   task.updatedAt = nowISO();
   saveState(); render(); $('editDialog').close();

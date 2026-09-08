@@ -43,20 +43,7 @@
             <input id="deadline" type="datetime-local" />
           </label>
           <label>
-            Effort
-            <select id="effort">
-              <option value="1">Tiny · &lt; 30 min</option>
-              <option value="2" selected>Small · 30–90 min</option>
-              <option value="3">Medium · 2–4 hr</option>
-              <option value="4">Large · 1 day</option>
-              <option value="5">Very large · 2+ days</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="grid two">
-          <label>
-            Business importance
+            Priority
             <select id="importance">
               <option value="1">Low</option>
               <option value="2">Normal</option>
@@ -65,9 +52,40 @@
               <option value="5">Critical</option>
             </select>
           </label>
+        </div>
+
+        <div class="grid two">
           <label>
             Project / category
             <input id="category" maxlength="60" placeholder="e.g. Phoenix rollout" />
+          </label>
+          <label>
+            Action By
+            <select id="actionBy">
+              <option value="Vendor">Vendor</option>
+              <option value="Cust">Cust</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label>
+            Status
+            <select id="taskStatus">
+              <option value="Open" selected>Open</option>
+              <option value="Closed">Closed</option>
+              <option value="KIV">KIV</option>
+            </select>
+          </label>
+          <label>
+            Effort
+            <select id="effort">
+              <option value="1">Tiny · &lt; 30 min</option>
+              <option value="2" selected>Small · 30–90 min</option>
+              <option value="3">Medium · 2–4 hr</option>
+              <option value="4">Large · 1 day</option>
+              <option value="5">Very large · 2+ days</option>
+            </select>
           </label>
         </div>
 
@@ -108,13 +126,14 @@
       <div class="section-title-row wrap">
         <div>
           <h2>All tasks</h2>
-          <p><span id="openCount">0</span> open · <span id="doneCount">0</span> completed</p>
+          <p><span id="openCount">0</span> open · <span id="kivCount">0</span> KIV · <span id="doneCount">0</span> closed</p>
         </div>
         <div class="toolbar">
           <select id="statusFilter" aria-label="Filter tasks">
-            <option value="open" selected>Open</option>
+            <option value="Open" selected>Open</option>
+            <option value="KIV">KIV</option>
+            <option value="Closed">Closed</option>
             <option value="all">All</option>
-            <option value="done">Completed</option>
           </select>
           <select id="sortMode" aria-label="Sort tasks">
             <option value="priority" selected>Priority</option>
@@ -165,15 +184,19 @@
       <label>Task<input id="editTitle" required maxlength="160" /></label>
       <div class="grid two">
         <label>Deadline<input id="editDeadline" type="datetime-local" /></label>
-        <label>Effort<select id="editEffort">
-          <option value="1">Tiny · &lt; 30 min</option><option value="2">Small · 30–90 min</option><option value="3">Medium · 2–4 hr</option><option value="4">Large · 1 day</option><option value="5">Very large · 2+ days</option>
+        <label>Priority<select id="editImportance">
+          <option value="1">Low</option><option value="2">Normal</option><option value="3">Important</option><option value="4">High</option><option value="5">Critical</option>
         </select></label>
       </div>
       <div class="grid two">
-        <label>Importance<select id="editImportance">
-          <option value="1">Low</option><option value="2">Normal</option><option value="3">Important</option><option value="4">High</option><option value="5">Critical</option>
-        </select></label>
         <label>Project / category<input id="editCategory" maxlength="60" /></label>
+        <label>Action By<select id="editActionBy"><option value="Vendor">Vendor</option><option value="Cust">Cust</option></select></label>
+      </div>
+      <div class="grid two">
+        <label>Status<select id="editStatus"><option value="Open">Open</option><option value="Closed">Closed</option><option value="KIV">KIV</option></select></label>
+        <label>Effort<select id="editEffort">
+          <option value="1">Tiny · &lt; 30 min</option><option value="2">Small · 30–90 min</option><option value="3">Medium · 2–4 hr</option><option value="4">Large · 1 day</option><option value="5">Very large · 2+ days</option>
+        </select></label>
       </div>
       <label>Notes<textarea id="editNotes" rows="4" maxlength="1000"></textarea></label>
       <div class="dialog-actions">
